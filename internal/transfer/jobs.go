@@ -50,12 +50,30 @@ type Conflict struct {
 func (e *Conflict) Error() string { return "destination names already exist" }
 
 type Manager struct {
-	mu    sync.RWMutex
-	jobs  map[string]*Job
-	order []string
+	mu     sync.RWMutex
+	jobs   map[string]*Job
+	order  []string
+	remote func(string, string) (location.Location, string, error)
 }
 
 func NewManager() *Manager { return &Manager{jobs: make(map[string]*Job)} }
+
+func NewWithRemote(resolve func(string, string) (location.Location, string, error)) *Manager {
+	m := NewManager()
+	m.remote = resolve
+	return m
+}
+
+func (m *Manager) resolve(endpoint Endpoint) (location.Location, string, error) {
+	if endpoint.Kind == "local" && endpoint.SessionID == "" {
+		directory, err := location.Directory(endpoint.Path)
+		return location.Local{Base: directory}, directory, err
+	}
+	if endpoint.Kind == "sftp" && endpoint.SessionID != "" && m.remote != nil {
+		return m.remote(endpoint.SessionID, endpoint.Path)
+	}
+	return nil, "", errors.New("choose a local directory or a connected SSH session")
+}
 
 type item struct {
 	rel  string
@@ -63,31 +81,35 @@ type item struct {
 }
 
 func (m *Manager) Start(req Request) (Job, error) {
-	if req.From.Kind != "local" || req.To.Kind != "local" || req.From.SessionID != "" || req.To.SessionID != "" {
-		return Job{}, errors.New("S1 supports local locations only")
+	if req.From.Kind == "sftp" && req.To.Kind == "sftp" {
+		return Job{}, errors.New("host-to-host copy is not available yet; choose a local pane")
 	}
-	source, err := location.Directory(req.From.Path)
+	from, source, err := m.resolve(req.From)
 	if err != nil {
 		return Job{}, fmt.Errorf("source: %w", err)
 	}
-	dest, err := location.Directory(req.To.Path)
+	to, dest, err := m.resolve(req.To)
 	if err != nil {
 		return Job{}, fmt.Errorf("destination: %w", err)
 	}
-	if source == dest {
+	sameLocation := req.From.Kind == req.To.Kind && req.From.SessionID == req.To.SessionID
+	if sameLocation && source == dest {
 		return Job{}, errors.New("choose a different destination directory")
 	}
 	if len(req.From.Names) == 0 {
 		return Job{}, errors.New("select at least one file or directory")
 	}
-	from, to := location.Local{Base: source}, location.Local{Base: dest}
 	items := []item{}
 	skipped := []string{}
 	walkErrors := []FileError{}
 	conflicts := []string{}
 	seen := map[string]bool{}
+	var preparationError error
 	var walk func(string, location.Entry)
 	walk = func(rel string, info location.Entry) {
+		if preparationError != nil {
+			return
+		}
 		if info.Symlink {
 			skipped = append(skipped, rel)
 			return
@@ -102,6 +124,9 @@ func (m *Manager) Start(req Request) (Job, error) {
 		}
 		children, err := from.List(filepath.Join(source, rel))
 		if err != nil {
+			if errors.Is(err, location.ErrUnavailable) {
+				preparationError = err
+			}
 			walkErrors = append(walkErrors, FileError{rel, err.Error()})
 			return
 		}
@@ -121,7 +146,7 @@ func (m *Manager) Start(req Request) (Job, error) {
 		if err != nil {
 			return Job{}, fmt.Errorf("source %s: %w", name, err)
 		}
-		if info.Directory {
+		if info.Directory && sameLocation {
 			original, target := filepath.Join(source, name), filepath.Join(dest, name)
 			if inside(original, dest) || inside(original, target) || inside(target, original) {
 				return Job{}, errors.New("source and destination folders overlap; choose another destination")
@@ -136,6 +161,10 @@ func (m *Manager) Start(req Request) (Job, error) {
 			}
 		}
 		walk(name, info)
+	}
+	// Do not start a partial tree when the session disappears during preparation.
+	if preparationError != nil {
+		return Job{}, preparationError
 	}
 	if len(conflicts) > 0 && !req.Replace {
 		return Job{}, &Conflict{conflicts}
@@ -222,6 +251,10 @@ func (m *Manager) run(job *Job, from, to location.Location, source, dest string,
 		}
 		if err != nil {
 			m.change(job, func() { job.Errors = append(job.Errors, FileError{item.rel, err.Error()}) })
+			if errors.Is(err, location.ErrUnavailable) {
+				m.change(job, func() { job.State = "failed"; job.Current = ""; m.prune() })
+				return
+			}
 		}
 	}
 	m.change(job, func() { job.State = "done"; job.Current = ""; m.prune() })

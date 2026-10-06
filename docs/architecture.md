@@ -58,9 +58,11 @@ MkdirAll(path) error
 
 `Local` uses the `os` package. `Remote` uses `*sftp.Client`. Transfer code copies from `Open` to `Create` and does not branch on which side is local.
 
-S2 handles remote directory listings in `internal/session`. A remote implementation of the copy interface arrives in S3. Copy jobs remain local-only until that slice.
+Remote directory browsing stays in `internal/session`. S3 implements the copy interface in `location.Remote` and binds each job to an existing live SSH session and a canonical remote directory. Jobs support local-to-local, upload, and download. Host-to-host requests remain disabled until S4.
 
 S1 implements `Local`. It writes each file to a temporary file in the destination directory, then publishes the completed copy. `replace=false` prevents a destination name created after preflight from being overwritten. A failed copy discards its temporary file. Destination links are errors. Source and destination directory trees must not overlap.
+
+`Remote` checks directory components and rejects source and destination links. For new uploads, `hardlink@openssh.com` publishes a temporary file without replacing an existing name. For replacements, `posix-rename@openssh.com` publishes the complete file atomically. Without the required extension, it opens the destination directly with exclusive creation or truncation. An interrupted direct replacement can leave a partial destination file. A dropped connection can leave a hidden upload temporary file because cleanup requires a live session. Permission changes are best effort.
 
 An `Entry` is name, path, directory bit, symlink bit, size, mode, and mtime.
 
@@ -148,7 +150,7 @@ Job payload:
 }
 ```
 
-`state` is `running`, `done`, or `failed`. `failed` means the job stopped before walking (bad path, dead session). A per-file error is appended to `errors` and the walk continues. The UI polls `GET /api/jobs/{id}` about three times a second until the state is terminal.
+`state` is `running`, `done`, or `failed`. Invalid paths and unavailable sessions during preparation reject the request without starting a job. A session lost during transfer appends a reconnect error and sets `state` to `failed`. Other per-file errors are appended to `errors` and the copy continues. The UI polls `GET /api/jobs/{id}` about three times a second until the state is terminal.
 
 ## Copy walk
 
@@ -158,7 +160,7 @@ Job payload:
 4. For a file, `Open` the source and `Create` the destination, then `io.Copy`.
 5. Best effort: set the destination mode from the source mode. A failure to chmod does not fail the file.
 
-Same-host SFTP still goes through this process. There is no server-side `cp`.
+S4 will use this same process for host-to-host transfers. There is no server-side `cp`.
 
 ## Pane state
 

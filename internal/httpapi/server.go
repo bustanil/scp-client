@@ -31,6 +31,9 @@ func New(home string, assets fs.FS) http.Handler {
 
 func NewWithServices(home string, assets fs.FS, records *connections.Store, sessions *session.Manager) http.Handler {
 	s := &Server{home: home, jobs: transfer.NewManager(), connections: records, sessions: sessions}
+	if sessions != nil {
+		s.jobs = transfer.NewWithRemote(sessions.Resolve)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/list", s.list)
 	mux.HandleFunc("POST /api/jobs", s.startJob)

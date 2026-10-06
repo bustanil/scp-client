@@ -130,12 +130,12 @@ export default function App() {
     if (running || startingRef.current || conflict) return
     const source = panes[active]
     const destination = panes[1 - active]
-    if (source.kind !== 'local' || destination.kind !== 'local') { setNotice('Copy is available between local folders.'); return }
+    if (source.kind === 'sftp' && destination.kind === 'sftp') { setNotice('Host-to-host copy is not available yet. Disconnect one pane to copy between this Mac and a host.'); return }
     if (source.loading || destination.loading || !source.path || !destination.path) return
     const cursorEntry = source.entries[source.cursor - 1]
     const names = source.selected.length ? source.selected : cursorEntry ? [cursorEntry.name] : []
     if (!names.length) { setNotice('Select a file or folder to copy. The parent row cannot be copied.'); return }
-    void startCopy({ from: { kind: 'local', path: source.path, names }, to: { kind: 'local', path: destination.path }, replace: false })
+    void startCopy({ from: { kind: source.kind, sessionId: source.sessionId, path: source.path, names }, to: { kind: destination.kind, sessionId: destination.sessionId, path: destination.path }, replace: false })
   }, [active, conflict, panes, running, startCopy])
 
   useEffect(() => {
@@ -219,8 +219,9 @@ export default function App() {
   const source = panes[active]
   const cursorEntry = source.entries[source.cursor - 1]
   const copyCount = source.selected.length || (cursorEntry ? 1 : 0)
-  const localCopy = panes.every(pane => pane.kind === 'local')
-  const ready = !running && !starting && !conflict && panes.every(pane => pane.kind === 'local' && pane.path && !pane.loading)
+  const hostToHost = panes.every(pane => pane.kind === 'sftp')
+  const operation = source.kind === 'sftp' ? 'Download' : panes[1 - active].kind === 'sftp' ? 'Upload' : 'Copy'
+  const ready = !hostToHost && !running && !starting && !conflict && panes.every(pane => pane.path && !pane.loading)
 
   return (
     <main className="app">
@@ -248,7 +249,7 @@ export default function App() {
           </section>
         ))}
       </div>
-      <div className="copy-bar"><div><span className="copy-direction">{active === 0 ? 'LEFT → RIGHT' : 'RIGHT → LEFT'}</span><p>{!localCopy ? 'Copy is available between local folders' : copyCount ? `${copyCount} item${copyCount === 1 ? '' : 's'} into the opposite pane’s folder` : 'Choose a file or folder to copy'}</p></div><button className="copy-button" disabled={!ready || !copyCount} onClick={copySelection}><kbd>F5</kbd>{starting ? 'Preparing…' : running ? 'Copying…' : 'Copy to other pane'}<span aria-hidden="true">→</span></button></div>
+      <div className="copy-bar"><div><span className="copy-direction">{active === 0 ? 'LEFT → RIGHT' : 'RIGHT → LEFT'} · {operation.toUpperCase()}</span><p>{hostToHost ? 'Disconnect one pane to copy between this Mac and a host' : copyCount ? `${copyCount} item${copyCount === 1 ? '' : 's'} into the opposite pane’s folder` : 'Choose a file or folder to copy'}</p></div><button className="copy-button" disabled={!ready || !copyCount} onClick={copySelection}><kbd>F5</kbd>{starting ? 'Preparing…' : running ? 'Copying…' : 'Copy to other pane'}<span aria-hidden="true">→</span></button></div>
       <div className="transfer-panel" aria-live="polite" aria-atomic="true">
         {notice && <p className="notice" role="alert">{notice}</p>}
         {job ? <><div className="transfer-summary"><span className={`status-dot ${running ? 'running' : job.errors.length || job.state === 'failed' ? 'error' : ''}`} /><strong>{running ? 'Copying' : job.state === 'failed' ? 'Copy failed' : job.errors.length ? 'Copy finished with errors' : 'Copy complete'}</strong><span>{job.filesDone} / {job.filesTotal} files · {sizeLabel(job.bytesDone)} written</span></div>{running && <><progress max={Math.max(1, job.filesTotal)} value={job.filesDone} /><p className="current-file">{job.current || 'Preparing files…'}</p></>}{pollError && <p className="notice">{pollError}</p>}{job.skipped.length > 0 && <p className="skipped">Skipped symbolic links: {job.skipped.join(', ')}</p>}{job.errors.length > 0 && <ul className="copy-errors">{job.errors.map((error, index) => <li key={index}><strong>{error.path}</strong>: {error.message}</li>)}</ul>}</> : <p className="idle-message"><span aria-hidden="true">⇄</span>Ready to copy. Symbolic links appear in the list and are skipped during copy.</p>}

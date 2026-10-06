@@ -83,7 +83,7 @@ func makeSigner(t *testing.T) (ed25519.PrivateKey, ssh.Signer) {
 }
 
 // The fixture uses the real SSH handshake and SFTP subsystem on loopback.
-func sshServer(t *testing.T, root string, acceptedKey ssh.PublicKey) *sshFixture {
+func sshServer(t *testing.T, root string, acceptedKey ssh.PublicKey, writable ...bool) *sshFixture {
 	t.Helper()
 	_, hostSigner := makeSigner(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -149,7 +149,11 @@ func sshServer(t *testing.T, root string, acceptedKey ssh.PublicKey) *sshFixture
 								_ = req.Reply(false, nil)
 								continue
 							}
-							remote, err := sftp.NewServer(channel, sftp.ReadOnly(), sftp.WithServerWorkingDirectory(root))
+							options := []sftp.ServerOption{sftp.WithServerWorkingDirectory(root)}
+							if len(writable) == 0 || !writable[0] {
+								options = append(options, sftp.ReadOnly())
+							}
+							remote, err := sftp.NewServer(channel, options...)
 							if err != nil {
 								_ = req.Reply(false, nil)
 								return

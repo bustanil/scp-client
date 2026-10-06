@@ -33,8 +33,8 @@ export interface Connected extends Listing {
 }
 
 export interface CopyRequest {
-  from: { kind: 'local'; path: string; names: string[] }
-  to: { kind: 'local'; path: string }
+  from: { kind: 'local' | 'sftp'; sessionId?: string; path: string; names: string[] }
+  to: { kind: 'local' | 'sftp'; sessionId?: string; path: string }
   replace: boolean
 }
 

@@ -43,7 +43,7 @@ Done when a password host and a private-key host each open in one pane, the othe
 
 ## S3 — Copy between this Mac and a host
 
-Status: not started.
+Status: implemented. Real loopback SSH/SFTP tests verify file and folder upload and download, overwrite and merge behavior, links, permissions, servers without atomic extensions, and dropped connections. Browser scenarios verify direction, session IDs, selection, overwrite confirmation, progress, and failure messages.
 
 F5 uploads the local selection and downloads the remote selection.
 

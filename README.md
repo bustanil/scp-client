@@ -1,6 +1,6 @@
 # scp-client
 
-A two-pane file manager for macOS. S1 supports local directories and copy jobs. S2 adds saved SSH connections and remote browsing.
+A two-pane file manager for macOS. Browse local folders and saved SSH connections. Copy files and folders between local directories or between this Mac and a host.
 
 ## Run
 
@@ -46,7 +46,7 @@ Records stay in `~/.scp-client/connections.json`. Trusted keys stay in `~/.scp-c
 
 Refresh returns both panes to local home directories. The browser requests session cleanup when leaving the page. If the browser exits without sending that request, the session remains until the Go process stops. Saved connections and trusted host keys survive a restart.
 
-Remote browsing is available in S2. Copy jobs still support local folders only. Upload and download arrive in S3.
+Connect one pane to upload or download. The copy bar shows the direction. Copy between two connected hosts arrives in S4.
 
 ## Copy
 
@@ -57,9 +57,11 @@ Remote browsing is available in S2. Copy jobs still support local folders only. 
 
 Tab switches panes. Up and Down move the cursor. Enter opens a directory. Backspace opens its parent.
 
-The status panel shows the current file, files completed, total files, bytes written, skipped links, and errors. Both panes refresh when the job finishes. A failed file does not stop the remaining files.
+The status panel shows the current file, files completed, total files, bytes written, skipped links, and errors. Both panes refresh when the job finishes. A failed file does not stop the remaining files. A dropped SSH session stops the job and shows a reconnect message. Completed files remain in place; jobs do not resume after reconnecting.
 
-Symbolic links appear in listings and are skipped during copy. Destination links are reported as errors. Regular files become visible after a complete copy. Failed copies remove their temporary files and preserve existing destination files. Directories cannot be copied into overlapping source or destination trees.
+Symbolic links appear in listings and are skipped during copy. Destination links are reported as errors. Local destinations publish regular files only after a complete copy and preserve existing files when a copy fails. Local directories cannot be copied into overlapping source or destination trees. Identical path names on this Mac and a remote host refer to different locations and are allowed.
+
+Uploads use temporary files when the server supports the OpenSSH hard-link extension for new files or the atomic-rename extension for replacements. Otherwise uploads write directly to the destination. On those servers, an interrupted replacement can leave a partial destination file. A lost connection can also prevent removal of an upload's hidden `.scp-client-*` temporary file. File permissions are copied on a best-effort basis.
 
 The app listens on `127.0.0.1:8787`. It runs with your macOS account's file permissions. It accepts the localhost app and development origins and rejects other browser origins. Jobs stay in memory and disappear when Go stops. The most recent 100 completed jobs remain available during a run.
 
@@ -76,7 +78,7 @@ npm run test:e2e
 
 Browser tests start and stop their own Go server. Port 8787 must be free before you run them. They use temporary directories and remove them afterward.
 
-Backend integration tests use a real loopback SSH/SFTP server with password and private-key authentication. Browser tests verify local copy, connection editing, pane behavior, and login dialogs. Browser login challenges use controlled API responses. Connection-editing tests use the production storage API in an isolated configuration directory.
+Backend integration tests use a real loopback SSH/SFTP server with password and private-key authentication. They verify upload, download, recursive folders, overwrite conflicts, links, permission failures, extension compatibility, and dropped connections. Browser tests verify local copy, connection editing, pane behavior, login dialogs, and remote copy requests and status. Browser SSH scenarios use controlled API responses. Connection-editing tests use the production storage API in an isolated configuration directory.
 
 On macOS, run the real Keychain check with a disposable test item:
 

@@ -179,8 +179,8 @@ func (m *Manager) Connect(ctx context.Context, req Request) (Connected, error) {
 	m.mu.Unlock()
 	succeeded = true
 	go func() {
-		_ = client.Wait()
-		_ = remote.Close()
+		_ = remote.Wait()
+		_ = client.Close()
 		m.mu.Lock()
 		delete(m.sessions, id)
 		m.mu.Unlock()
@@ -240,6 +240,41 @@ func (m *Manager) List(ctx context.Context, id, directory string) (Listing, erro
 		return Listing{}, &Problem{"list_failed", fmt.Sprintf("Cannot list remote directory: %v", err)}
 	}
 	return listing, nil
+}
+
+// Resolve binds a job to the live session and a canonical remote directory.
+func (m *Manager) Resolve(id, directory string) (location.Location, string, error) {
+	m.mu.RLock()
+	s := m.sessions[id]
+	m.mu.RUnlock()
+	if s == nil {
+		return nil, "", location.ErrUnavailable
+	}
+	remote := location.Remote{Client: s.sftp, Available: func() bool {
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+		return m.sessions[id] == s
+	}}
+	if !path.IsAbs(directory) {
+		return nil, "", errors.New("use an absolute remote directory path")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	stop := context.AfterFunc(ctx, func() { s.ssh.Close() })
+	defer stop()
+	canonical, err := s.sftp.RealPath(path.Clean(directory))
+	if err != nil {
+		return nil, "", fmt.Errorf("cannot resolve remote directory: %w", err)
+	}
+	remote.Base = canonical
+	info, err := s.sftp.Lstat(canonical)
+	if err != nil {
+		return nil, "", err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return nil, "", errors.New("remote path is not a directory")
+	}
+	return remote, canonical, nil
 }
 
 func readPrivateKey(path string) ([]byte, error) {
