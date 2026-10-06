@@ -4,3 +4,8 @@
 /web/test-results/
 /web/playwright-report/
 /scp-client
+/desktop/node_modules/
+/desktop/build/
+/desktop/out/
+/desktop/test-results/
+/desktop/playwright-report/

@@ -2,7 +2,7 @@
 
 Each slice is one user-visible path through the UI and the API. Later slices build on earlier ones. Do not start a slice by finishing every backend package in advance.
 
-Dependencies run in order: S1, then S2, then S3, then S4.
+Dependencies run in order: S1, then S2, then S3, then S4, then S5.
 
 ## S1 — Two local panes, copy between them
 
@@ -68,6 +68,23 @@ Includes:
 - Editing or deleting a connection does not drop a live session until disconnect. Delete of a connection that still has a session is refused with `code: in_use`.
 
 Done when a file copied from host A shows up in host B’s pane, and a copy between two directories on one host shows up without using the local disk as a saved file.
+
+## S5 — Package one macOS app
+
+Status: implemented for Apple Silicon. Electron tests verify the packaged app with a system-only `PATH`, file and folder copying, overwrite confirmation, connection persistence, window reopening, single-instance behavior, and backend shutdown. A disposable Keychain check verifies saved password storage and deletion. The disk image passes checksum verification and contains the app and an Applications shortcut. Developer ID signing, notarization, and Intel execution remain unverified.
+
+The user opens one app. Electron starts the bundled Go service and displays the existing React workspace.
+
+Includes:
+
+- Electron main process with an isolated renderer and native app menus.
+- Embedded React assets and a bundled Go executable outside the application archive.
+- A free loopback port and a startup token attached by Electron.
+- Readiness checks, startup errors, and service shutdown on Cmd-Q.
+- Existing connection records, host keys, and Keychain storage.
+- A macOS app icon and Electron Forge app and disk-image builds.
+
+Done when the packaged app copies files without Go or Node.js installed, saves connections across restarts, and stops its service when the user quits.
 
 ## After v1
 

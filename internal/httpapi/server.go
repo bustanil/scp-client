@@ -1,10 +1,12 @@
 package httpapi
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"path/filepath"
 	"sync"
@@ -25,11 +27,21 @@ type Server struct {
 	connectionMu sync.Mutex
 }
 
+// Options binds desktop requests to the listener chosen by the Go process.
+type Options struct {
+	Address string
+	Token   string
+}
+
 func New(home string, assets fs.FS) http.Handler {
 	return NewWithServices(home, assets, nil, nil)
 }
 
 func NewWithServices(home string, assets fs.FS, records *connections.Store, sessions *session.Manager) http.Handler {
+	return NewWithOptions(home, assets, records, sessions, Options{Address: "127.0.0.1:8787"})
+}
+
+func NewWithOptions(home string, assets fs.FS, records *connections.Store, sessions *session.Manager, options Options) http.Handler {
 	s := &Server{home: home, jobs: transfer.NewManager(), connections: records, sessions: sessions}
 	if sessions != nil {
 		s.jobs = transfer.NewWithRemote(sessions.Resolve)
@@ -38,6 +50,11 @@ func NewWithServices(home string, assets fs.FS, records *connections.Store, sess
 	mux.HandleFunc("GET /api/list", s.list)
 	mux.HandleFunc("POST /api/jobs", s.startJob)
 	mux.HandleFunc("GET /api/jobs/{id}", s.getJob)
+	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, struct {
+			Status string `json:"status"`
+		}{"ok"})
+	})
 	mux.HandleFunc("GET /api/connections", s.listConnections)
 	mux.HandleFunc("POST /api/connections", s.createConnection)
 	mux.HandleFunc("PUT /api/connections/{id}", s.updateConnection)
@@ -60,23 +77,34 @@ func NewWithServices(home string, assets fs.FS, records *connections.Store, sess
 			http.Error(w, "Build the frontend with npm --prefix web run build, then restart Go. For development, run npm --prefix web run dev.", http.StatusServiceUnavailable)
 		})
 	}
-	return protect(mux)
+	return protect(mux, options)
 }
 
-func protect(next http.Handler) http.Handler {
+func protect(next http.Handler, options Options) http.Handler {
+	_, port, _ := net.SplitHostPort(options.Address)
+	allowedHosts := map[string]bool{options.Address: true, "localhost:" + port: true}
+	allowedOrigins := map[string]bool{"http://" + options.Address: true, "http://localhost:" + port: true}
+	if options.Token == "" {
+		allowedOrigins["http://127.0.0.1:5173"] = true
+		allowedOrigins["http://localhost:5173"] = true
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Checking Host also stops DNS rebinding to this local service.
-		if r.Host != "127.0.0.1:8787" && r.Host != "localhost:8787" {
-			fail(w, http.StatusForbidden, "invalid_host", "use localhost:8787 or 127.0.0.1:8787")
+		if !allowedHosts[r.Host] {
+			fail(w, http.StatusForbidden, "invalid_host", "use the app's localhost address")
 			return
 		}
 		origin := r.Header.Get("Origin")
-		if origin != "" && origin != "http://127.0.0.1:8787" && origin != "http://localhost:8787" && origin != "http://127.0.0.1:5173" && origin != "http://localhost:5173" {
+		if origin != "" && !allowedOrigins[origin] {
 			fail(w, http.StatusForbidden, "invalid_origin", "requests from this origin are not allowed")
 			return
 		}
 		if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
 			fail(w, http.StatusForbidden, "invalid_origin", "cross-site requests are not allowed")
+			return
+		}
+		if options.Token != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get("X-SCP-Desktop-Token")), []byte(options.Token)) != 1 {
+			fail(w, http.StatusUnauthorized, "desktop_auth_required", "open this location in the desktop app")
 			return
 		}
 		w.Header().Set("X-Content-Type-Options", "nosniff")

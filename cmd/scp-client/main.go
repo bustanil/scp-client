@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"flag"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,6 +22,15 @@ import (
 )
 
 func main() {
+	desktop := flag.Bool("desktop", false, "use a private port for the desktop app")
+	flag.Parse()
+	address, token := "127.0.0.1:8787", ""
+	if *desktop {
+		address, token = "127.0.0.1:0", os.Getenv("SCP_CLIENT_DESKTOP_TOKEN")
+		if len(token) < 32 {
+			log.Fatal("desktop mode requires a startup token")
+		}
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		log.Fatal(err)
@@ -37,8 +49,14 @@ func main() {
 	}
 	sessions := session.New(records, hosts)
 	defer sessions.Close()
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer listener.Close()
+	address = listener.Addr().String()
 	server := &http.Server{
-		Addr: "127.0.0.1:8787", Handler: httpapi.NewWithServices(home, web.Assets(), records, sessions),
+		Addr: address, Handler: httpapi.NewWithOptions(home, web.Assets(), records, sessions, httpapi.Options{Address: address, Token: token}),
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second,
 		WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second,
 	}
@@ -51,7 +69,15 @@ func main() {
 		_ = server.Shutdown(shutdown)
 	}()
 	log.Printf("scp-client listening at http://%s", server.Addr)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if *desktop {
+		if err := json.NewEncoder(os.Stdout).Encode(struct {
+			Event string `json:"event"`
+			URL   string `json:"url"`
+		}{"ready", "http://" + address}); err != nil {
+			log.Fatal(err)
+		}
+	}
+	if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 }

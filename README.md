@@ -2,7 +2,36 @@
 
 A two-pane file manager for macOS. Browse local folders and saved SSH connections. Copy files and folders between local directories, between this Mac and a host, or between two hosts.
 
-## Run
+## Desktop app
+
+The Electron app bundles the Go service and the built React UI. You do not need Go, Node.js, or a terminal to run the packaged app. It uses the same saved connections, trusted host keys, and macOS Keychain items as browser mode.
+
+Build on macOS with Go, Node.js, and the Xcode command line tools installed:
+
+```sh
+npm --prefix web ci
+npm --prefix desktop ci
+npm --prefix desktop run make
+```
+
+The build creates these Apple Silicon artifacts:
+
+- `desktop/out/scp-client-darwin-arm64/scp-client.app`
+- `desktop/out/make/dmg/arm64/scp-client.dmg`
+
+Open the disk image and drag `scp-client.app` into Applications. Open the app to start browsing. Use **scp-client > Quit scp-client** or Cmd-Q to stop its file service and SSH sessions. Closing the window keeps the app in the Dock. Click its Dock icon to reopen the workspace.
+
+The app starts its own service on a free localhost port. It can run beside browser mode on port 8787. Opening another copy focuses the existing app window. Reopening a closed window starts both panes at your home directory; saved connections remain.
+
+The current build has no Developer ID signing or notarization. Configure signing and notarization before distributing a release to other Macs. Apple Silicon packaging and execution are verified. The build supports `npm --prefix desktop run make -- --arch=x64` for Intel, but Intel execution is not verified.
+
+For desktop development:
+
+```sh
+npm --prefix desktop start
+```
+
+## Browser mode
 
 You need Go 1.26 or later and a Node.js version supported by Vite 8. The implementation is verified with Go 1.27.1 and Node.js 26.8.1.
 
@@ -65,7 +94,7 @@ Symbolic links appear in listings and are skipped during copy. Destination links
 
 Remote destinations use temporary files when the server supports the OpenSSH hard-link extension for new files or the atomic-rename extension for replacements. Otherwise copies write directly to the destination. On those servers, an interrupted replacement can leave a partial destination file. A lost connection can also prevent removal of a hidden `.scp-client-*` temporary file. File permissions are copied on a best-effort basis.
 
-The app listens on `127.0.0.1:8787`. It runs with your macOS account's file permissions. It accepts the localhost app and development origins and rejects other browser origins. Jobs stay in memory and disappear when Go stops. The most recent 100 completed jobs remain available during a run.
+Browser mode listens on `127.0.0.1:8787`. Desktop mode chooses a free port on `127.0.0.1` and requires a startup token attached by Electron. The app runs with your macOS account's file permissions. It accepts its own localhost origin and rejects other browser origins. Browser mode also accepts the Vite development origin. Jobs stay in memory and disappear when Go stops. The most recent 100 completed jobs remain available during a run.
 
 ## Verify
 
@@ -89,6 +118,24 @@ SCP_CLIENT_TEST_KEYCHAIN=1 go test ./internal/secrets -v
 ```
 
 The check removes its test item afterward.
+
+Verify the desktop service controller and Electron window:
+
+```sh
+npm --prefix desktop run build
+npm --prefix desktop test
+npm --prefix desktop run test:e2e
+```
+
+Verify the packaged Apple Silicon app, including a disposable Keychain item:
+
+```sh
+SCP_CLIENT_TEST_KEYCHAIN=1 \
+SCP_CLIENT_APP_EXECUTABLE="$PWD/desktop/out/scp-client-darwin-arm64/scp-client.app/Contents/MacOS/scp-client" \
+npm --prefix desktop run test:e2e
+```
+
+Desktop tests use isolated connection and Electron profile directories. They verify real file and folder copies, overwrite confirmation, connection persistence, window reopening, single-instance behavior, and service shutdown. Packaged tests launch with a system-only `PATH` to verify that Go and Node.js installations are not needed. The optional Keychain test creates and removes only its own item. Service tests verify startup failures, timeout cleanup, independent ports, and token enforcement.
 
 ## Plan
 

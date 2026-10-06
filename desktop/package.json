@@ -1,0 +1,30 @@
+{
+  "name": "scp-client-desktop",
+  "productName": "scp-client",
+  "version": "0.1.0",
+  "description": "A two-pane SSH and SFTP file manager for macOS",
+  "author": "bustanil",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "npm run build && electron .",
+    "package": "node scripts/package.mjs package",
+    "make": "node scripts/package.mjs make",
+    "test": "node --test tests/backend.test.cjs",
+    "test:e2e": "playwright test"
+  },
+  "config": {
+    "forge": "./forge.config.cjs"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "8.0.1",
+    "@electron-forge/maker-dmg": "8.0.1",
+    "@playwright/test": "1.63.0",
+    "electron": "44.5.1"
+  },
+  "allowScripts": {
+    "fs-xattr@0.3.1": true,
+    "macos-alias@0.2.12": true
+  }
+}

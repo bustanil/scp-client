@@ -1,6 +1,6 @@
 # scp-client architecture
 
-Go serves a local HTTP API and the built React app. The browser is a two-pane commander. SSH and SFTP stay in Go.
+Go serves a local HTTP API and the built React app. Electron displays the two-pane workspace in the packaged app. Browser mode remains available. SSH and SFTP stay in Go.
 
 ## System
 
@@ -16,7 +16,13 @@ Go process
   local disk               os package
 ```
 
-Dev runs Vite on its own port and proxies `/api` to Go. A production run is one Go process: it serves `web/dist` and the API on `127.0.0.1:8787`.
+Dev runs Vite on its own port and proxies `/api` to Go. Browser mode uses one Go process: it serves `web/dist` and the API on `127.0.0.1:8787`.
+
+Desktop mode starts the bundled Go executable with `--desktop`. Go binds `127.0.0.1:0`, then prints its assigned URL as a JSON readiness message. Electron verifies the URL and polls `/api/health` before opening the window. A random token travels through the child environment and Electron attaches it to requests. The renderer does not receive Node.js APIs or a preload bridge. Its session blocks requests and navigation outside the owned service and denies browser permission requests.
+
+Electron keeps one app instance per user profile. Closing the window leaves the service running on macOS. Dock activation reopens the window. Cmd-Q sends SIGTERM, waits up to five seconds, and terminates an unresponsive child. Go shuts down HTTP and closes SSH sessions. Startup and unexpected process failures show an error and quit the app.
+
+Electron Forge packages the main process into an ASAR application archive. The Go executable stays in `Contents/Resources/backend`, where Electron can execute it directly. Go embeds the React build. The resulting app includes the Electron runtime and requires no external Node.js or Go installation.
 
 ## Why these pieces
 
@@ -27,6 +33,7 @@ Dev runs Vite on its own port and proxies `/api` to Go. A production run is one 
 | SFTP | `github.com/pkg/sftp` v1.13.11 | `sftp.NewClient` on that SSH connection. List, read, write. |
 | Secrets | `github.com/zalando/go-keyring` | Service `scp-client`, account is the connection id. |
 | UI | React + Vite | Two instances of one pane component. Plain CSS. |
+| Desktop | Electron + Electron Forge | Window, service lifecycle, app bundle, disk image. |
 
 Directory listings use the SFTP subsystem. The legacy `scp` command cannot list a directory, so the file panes speak SFTP.
 
@@ -42,6 +49,7 @@ internal/location/          List, Open, Create, MkdirAll, Stat
 internal/session/           SSH dial and SFTP client pool
 internal/transfer/          copy job
 web/                        React app
+desktop/                    Electron main process, packaging, desktop tests
 ```
 
 ## One location type
@@ -119,6 +127,7 @@ All bodies are JSON. Errors use `{ "code", "message" }`.
 | POST | `/api/sessions` | Connect the active pane. |
 | DELETE | `/api/sessions/{id}` | Disconnect. |
 | GET | `/api/list?kind=local\|sftp&sessionId=&path=` | Directory listing. |
+| GET | `/api/health` | Startup readiness check. |
 | POST | `/api/jobs` | Start a copy. |
 | GET | `/api/jobs/{id}` | Progress. |
 
@@ -173,7 +182,8 @@ The browser holds both panes: kind, session id, path, cursor index, selection, a
 
 - `Listen` is `127.0.0.1`, not `0.0.0.0`.
 - No CORS for other origins.
-- Local requests require a localhost Host header. The API accepts the app origins on port 8787 and the Vite development origins on port 5173. It rejects other browser origins and cross-site requests.
+- Local requests require a Host header matching the assigned listener or its localhost alias. Browser mode accepts app origins on port 8787 and Vite development origins on port 5173. Desktop mode accepts its assigned origin and requires `X-SCP-Desktop-Token` on every request. Both reject other browser origins and cross-site requests.
+- The desktop renderer enables Chromium sandboxing and context isolation and disables Node.js integration. Go retains the macOS user's file permissions.
 - Connection file mode `0600`, directory mode `0700`.
 - Host-key mismatch never writes `known_hosts`.
 - Local list and copy use the OS user’s permissions. The app does not add a second sandbox. That is intentional: the local pane is this Mac’s disk.
@@ -185,3 +195,5 @@ go run ./cmd/scp-client
 ```
 
 Run `npm --prefix web ci` and `npm --prefix web run build` before starting Go for production. The binary embeds `web/dist` at compilation time. Without a frontend build, Go serves the API and a build instruction at `/`. In dev, Vite proxies `/api` to `:8787`.
+
+Run `npm --prefix desktop ci` and `npm --prefix desktop run make` to build the macOS app and disk image. The build script compiles React, cross-compiles Go for the selected macOS processor, and generates the icon before packaging. See the README for output paths, verification commands, and signing limitations.
