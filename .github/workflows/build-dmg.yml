@@ -56,10 +56,25 @@ jobs:
           go vet ./...
           npm --prefix desktop test
 
+      - name: Verify app signatures
+        run: |
+          app='desktop/out/scp-client-darwin-arm64/scp-client.app'
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign --verify --strict --verbose=2 "$app/Contents/Resources/backend/scp-client"
+
+      - name: Test packaged app
+        run: npm --prefix desktop run test:e2e
+        env:
+          SCP_CLIENT_APP_EXECUTABLE: ${{ github.workspace }}/desktop/out/scp-client-darwin-arm64/scp-client.app/Contents/MacOS/scp-client
+
       - name: Verify disk image and create checksum
         working-directory: desktop/out/make/dmg/arm64
         run: |
           hdiutil verify scp-client.dmg
+          mount_dir=$(mktemp -d)
+          trap 'hdiutil detach "$mount_dir"; rmdir "$mount_dir"' EXIT
+          hdiutil attach -readonly -nobrowse -mountpoint "$mount_dir" scp-client.dmg
+          codesign --verify --deep --strict --verbose=2 "$mount_dir/scp-client.app"
           shasum -a 256 scp-client.dmg > scp-client.dmg.sha256
 
       - name: Upload installer

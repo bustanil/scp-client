@@ -23,7 +23,7 @@ Open the disk image and drag `scp-client.app` into Applications. Open the app to
 
 The app starts its own service on a free localhost port. It can run beside browser mode on port 8787. Opening another copy focuses the existing app window. Reopening a closed window starts both panes at your home directory; saved connections remain.
 
-The current build has no Developer ID signing or notarization. Configure signing and notarization before distributing a release to other Macs. Apple Silicon packaging and execution are verified. The build supports `npm --prefix desktop run make -- --arch=x64` for Intel, but Intel execution is not verified.
+The build signs the final app bundle and its executables with an ad-hoc signature. This checks integrity but does not identify a trusted developer. Downloaded builds do not pass default Gatekeeper checks without Developer ID signing and Apple notarization. Configure both before distributing a release to other Macs. Apple Silicon packaging and execution are verified. The build supports `npm --prefix desktop run make -- --arch=x64` for Intel, but Intel execution is not verified.
 
 For desktop development:
 
@@ -33,7 +33,7 @@ npm --prefix desktop start
 
 ### GitHub Actions builds
 
-The [Build macOS DMG workflow](.github/workflows/build-dmg.yml) builds an Apple Silicon installer on pushes to `main`, tags beginning with `v`, pull requests targeting `main`, and manual runs. It checks the Go backend and desktop service lifecycle, verifies the disk image, and uploads the installer and SHA-256 checksum.
+The [Build macOS DMG workflow](.github/workflows/build-dmg.yml) builds an Apple Silicon installer on pushes to `main`, tags beginning with `v`, pull requests targeting `main`, and manual runs. It checks the Go backend and desktop service lifecycle, runs the packaged app tests, verifies app signatures before and after copying into the disk image, verifies the disk image checksum, and uploads the installer and SHA-256 checksum.
 
 Open the repository's **Actions** tab, select a successful **Build macOS DMG** run, and download **scp-client-macos-arm64** under **Artifacts**. Extract the archive to get `scp-client.dmg` and `scp-client.dmg.sha256`. Artifacts expire after 14 days. These builds have no Developer ID signing or notarization.
 

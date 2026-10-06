@@ -83,6 +83,7 @@ Includes:
 - Readiness checks, startup errors, and service shutdown on Cmd-Q.
 - Existing connection records, host keys, and Keychain storage.
 - A macOS app icon and Electron Forge app and disk-image builds.
+- Ad-hoc signing of the final app and executables, with signature verification in the app bundle and mounted disk image. Downloaded builds still require Developer ID signing and notarization to pass default Gatekeeper checks.
 
 Done when the packaged app copies files without Go or Node.js installed, saves connections across restarts, and stops its service when the user quits.
 

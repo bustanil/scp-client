@@ -36,6 +36,8 @@ async function launch() {
   const page = await application.firstWindow()
   await expect(page.getByRole('heading', { name: 'scp-client', exact: true })).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'Left directory path' })).not.toHaveValue('')
+  // Keep automated input separate from typing in other apps on the test machine.
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach(window => window.hide()))
   return { page, env }
 }
 
