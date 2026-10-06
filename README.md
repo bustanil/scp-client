@@ -31,6 +31,18 @@ For desktop development:
 npm --prefix desktop start
 ```
 
+### GitHub Actions builds
+
+The [Build macOS DMG workflow](.github/workflows/build-dmg.yml) builds an Apple Silicon installer on pushes to `main`, tags beginning with `v`, pull requests targeting `main`, and manual runs. It checks the Go backend and desktop service lifecycle, verifies the disk image, and uploads the installer and SHA-256 checksum.
+
+Open the repository's **Actions** tab, select a successful **Build macOS DMG** run, and download **scp-client-macos-arm64** under **Artifacts**. Extract the archive to get `scp-client.dmg` and `scp-client.dmg.sha256`. Artifacts expire after 14 days. These builds have no Developer ID signing or notarization.
+
+To build manually, select **Build macOS DMG > Run workflow**. To verify a downloaded installer, run this command in the extracted directory:
+
+```sh
+shasum -a 256 -c scp-client.dmg.sha256
+```
+
 ## Browser mode
 
 You need Go 1.26 or later and a Node.js version supported by Vite 8. The implementation is verified with Go 1.27.1 and Node.js 26.8.1.
