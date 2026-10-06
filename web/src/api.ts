@@ -15,6 +15,23 @@ export interface Listing {
   entries: Entry[]
 }
 
+export interface Connection {
+  id: string
+  name: string
+  host: string
+  port: number
+  username: string
+  startPath: string
+  auth: 'password' | 'privateKey'
+  privateKeyPath: string
+}
+
+export interface Connected extends Listing {
+  sessionId: string
+  connectionId: string
+  name: string
+}
+
 export interface CopyRequest {
   from: { kind: 'local'; path: string; names: string[] }
   to: { kind: 'local'; path: string }
@@ -35,15 +52,20 @@ export interface Job {
 export class APIError extends Error {
   code: string
   names: string[]
-  constructor(body: { message?: string; code?: string; names?: string[] }, status: number) {
+  fingerprint: string
+  keyType: string
+  constructor(body: { message?: string; code?: string; names?: string[]; fingerprint?: string; keyType?: string }, status: number) {
     super(body.message ?? `Request failed (${status})`)
     this.code = body.code ?? 'request_failed'
     this.names = body.names ?? []
+    this.fingerprint = body.fingerprint ?? ''
+    this.keyType = body.keyType ?? ''
   }
 }
 
 export async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init)
+  if (response.status === 204) return undefined as T
   const body = await response.json()
   if (!response.ok) throw new APIError(body, response.status)
   return body as T

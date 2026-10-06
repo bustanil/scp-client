@@ -6,10 +6,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
+	"scp-client/internal/connections"
 	"scp-client/internal/httpapi"
+	"scp-client/internal/knownhosts"
+	"scp-client/internal/secrets"
+	"scp-client/internal/session"
 	"scp-client/web"
 )
 
@@ -18,8 +23,22 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	dataDir := os.Getenv("SCP_CLIENT_DATA_DIR")
+	if dataDir == "" {
+		dataDir = filepath.Join(home, ".scp-client")
+	}
+	records, err := connections.New(dataDir, secrets.Keychain{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	hosts, err := knownhosts.New(dataDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	sessions := session.New(records, hosts)
+	defer sessions.Close()
 	server := &http.Server{
-		Addr: "127.0.0.1:8787", Handler: httpapi.New(home, web.Assets()),
+		Addr: "127.0.0.1:8787", Handler: httpapi.NewWithServices(home, web.Assets(), records, sessions),
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second,
 		WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second,
 	}

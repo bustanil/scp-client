@@ -7,22 +7,40 @@ import (
 	"io/fs"
 	"net/http"
 	"path/filepath"
+	"sync"
+
+	"scp-client/internal/connections"
+	"scp-client/internal/knownhosts"
 
 	"scp-client/internal/location"
+	"scp-client/internal/session"
 	"scp-client/internal/transfer"
 )
 
 type Server struct {
-	home string
-	jobs *transfer.Manager
+	home         string
+	jobs         *transfer.Manager
+	connections  *connections.Store
+	sessions     *session.Manager
+	connectionMu sync.Mutex
 }
 
 func New(home string, assets fs.FS) http.Handler {
-	s := &Server{home: home, jobs: transfer.NewManager()}
+	return NewWithServices(home, assets, nil, nil)
+}
+
+func NewWithServices(home string, assets fs.FS, records *connections.Store, sessions *session.Manager) http.Handler {
+	s := &Server{home: home, jobs: transfer.NewManager(), connections: records, sessions: sessions}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/list", s.list)
 	mux.HandleFunc("POST /api/jobs", s.startJob)
 	mux.HandleFunc("GET /api/jobs/{id}", s.getJob)
+	mux.HandleFunc("GET /api/connections", s.listConnections)
+	mux.HandleFunc("POST /api/connections", s.createConnection)
+	mux.HandleFunc("PUT /api/connections/{id}", s.updateConnection)
+	mux.HandleFunc("DELETE /api/connections/{id}", s.deleteConnection)
+	mux.HandleFunc("POST /api/sessions", s.connect)
+	mux.HandleFunc("DELETE /api/sessions/{id}", s.disconnect)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "not_found", "API route not found")
 	})
@@ -64,6 +82,15 @@ func protect(next http.Handler) http.Handler {
 }
 
 func (s *Server) list(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("kind") == "sftp" && s.sessions != nil {
+		listing, err := s.sessions.List(r.Context(), r.URL.Query().Get("sessionId"), r.URL.Query().Get("path"))
+		if err != nil {
+			s.serviceError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, listing)
+		return
+	}
 	if r.URL.Query().Get("kind") != "local" || r.URL.Query().Get("sessionId") != "" {
 		fail(w, http.StatusBadRequest, "invalid_location", "S1 supports local locations only")
 		return
@@ -91,20 +118,8 @@ func (s *Server) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) startJob(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Content-Type") != "application/json" {
-		fail(w, http.StatusUnsupportedMediaType, "invalid_content_type", "use application/json")
-		return
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
 	var req transfer.Request
-	if err := decoder.Decode(&req); err != nil {
-		fail(w, http.StatusBadRequest, "invalid_request", err.Error())
-		return
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		fail(w, http.StatusBadRequest, "invalid_request", "provide one JSON object")
+	if !decode(w, r, &req) {
 		return
 	}
 	job, err := s.jobs.Start(req)
@@ -122,6 +137,142 @@ func (s *Server) startJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, job)
+}
+
+func decode(w http.ResponseWriter, r *http.Request, body any) bool {
+	if r.Header.Get("Content-Type") != "application/json" {
+		fail(w, http.StatusUnsupportedMediaType, "invalid_content_type", "use application/json")
+		return false
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(body); err != nil {
+		fail(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return false
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		fail(w, http.StatusBadRequest, "invalid_request", "provide one JSON object")
+		return false
+	}
+	return true
+}
+
+func (s *Server) available(w http.ResponseWriter) bool {
+	if s.connections == nil || s.sessions == nil {
+		fail(w, http.StatusServiceUnavailable, "unavailable", "connection services are not configured")
+		return false
+	}
+	return true
+}
+
+func (s *Server) listConnections(w http.ResponseWriter, r *http.Request) {
+	if s.available(w) {
+		writeJSON(w, http.StatusOK, s.connections.List())
+	}
+}
+
+func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) { s.saveConnection(w, r, "") }
+func (s *Server) updateConnection(w http.ResponseWriter, r *http.Request) {
+	s.saveConnection(w, r, r.PathValue("id"))
+}
+func (s *Server) saveConnection(w http.ResponseWriter, r *http.Request, id string) {
+	if !s.available(w) {
+		return
+	}
+	var input connections.Input
+	if !decode(w, r, &input) {
+		return
+	}
+	s.connectionMu.Lock()
+	defer s.connectionMu.Unlock()
+	record, err := s.connections.Save(id, input)
+	if err != nil {
+		s.serviceError(w, err)
+		return
+	}
+	status := http.StatusOK
+	if id == "" {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, record)
+}
+
+func (s *Server) deleteConnection(w http.ResponseWriter, r *http.Request) {
+	if !s.available(w) {
+		return
+	}
+	s.connectionMu.Lock()
+	defer s.connectionMu.Unlock()
+	id := r.PathValue("id")
+	if s.sessions.InUse(id) {
+		fail(w, http.StatusConflict, "in_use", "Disconnect this connection before deleting it.")
+		return
+	}
+	if err := s.connections.Delete(id); err != nil {
+		s.serviceError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
+	if !s.available(w) {
+		return
+	}
+	var input session.Request
+	if !decode(w, r, &input) {
+		return
+	}
+	s.connectionMu.Lock()
+	defer s.connectionMu.Unlock()
+	connected, err := s.sessions.Connect(r.Context(), input)
+	if err != nil {
+		s.serviceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, connected)
+}
+
+func (s *Server) disconnect(w http.ResponseWriter, r *http.Request) {
+	if !s.available(w) {
+		return
+	}
+	s.sessions.Disconnect(r.PathValue("id"))
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) serviceError(w http.ResponseWriter, err error) {
+	var host *knownhosts.Problem
+	if errors.As(err, &host) {
+		status := http.StatusPreconditionFailed
+		if host.Code == "host_key_changed" {
+			status = http.StatusConflict
+		}
+		writeJSON(w, status, host)
+		return
+	}
+	var issue *session.Problem
+	if errors.As(err, &issue) {
+		status := http.StatusBadRequest
+		switch issue.Code {
+		case "auth_failed":
+			status = http.StatusUnauthorized
+		case "passphrase_required", "secret_required":
+			status = http.StatusPreconditionRequired
+		case "session_unavailable":
+			status = http.StatusConflict
+		case "connect_failed", "sftp_failed":
+			status = http.StatusBadGateway
+		}
+		fail(w, status, issue.Code, issue.Message)
+		return
+	}
+	if errors.Is(err, connections.ErrNotFound) {
+		fail(w, http.StatusNotFound, "connection_not_found", err.Error())
+		return
+	}
+	fail(w, http.StatusBadRequest, "connection_failed", err.Error())
 }
 
 func (s *Server) getJob(w http.ResponseWriter, r *http.Request) {

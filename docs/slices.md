@@ -24,7 +24,7 @@ Done when a file and a nested folder copy between two local directories, an exis
 
 ## S2 — Save a connection and browse the host
 
-Status: not started.
+Status: implemented. Real loopback SSH/SFTP tests cover password and private-key hosts, trust, auth failures, changed keys, and persisted connections. A macOS Keychain round trip and browser connection scenarios verify the remaining behavior. See the README for verification commands.
 
 The user adds a host, trusts the key, and that host fills the active pane. After a restart the connection is still in the list and can connect again.
 

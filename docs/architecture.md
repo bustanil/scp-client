@@ -58,6 +58,8 @@ MkdirAll(path) error
 
 `Local` uses the `os` package. `Remote` uses `*sftp.Client`. Transfer code copies from `Open` to `Create` and does not branch on which side is local.
 
+S2 handles remote directory listings in `internal/session`. A remote implementation of the copy interface arrives in S3. Copy jobs remain local-only until that slice.
+
 S1 implements `Local`. It writes each file to a temporary file in the destination directory, then publishes the completed copy. `replace=false` prevents a destination name created after preflight from being overwritten. A failed copy discards its temporary file. Destination links are errors. Source and destination directory trees must not overlap.
 
 An `Entry` is name, path, directory bit, symlink bit, size, mode, and mtime.
@@ -79,11 +81,11 @@ An `Entry` is name, path, directory bit, symlink bit, size, mode, and mtime.
 }
 ```
 
-`auth` is `password` or `privateKey`. The keychain item is the password, or the passphrase of an encrypted key. An empty keychain item means the key file has no passphrase. The API never returns secret fields.
+`auth` is `password` or `privateKey`. The keychain item is the password, or the passphrase of an encrypted key. A missing item does not establish whether the key is encrypted. The app parses the file and prompts if it requires a passphrase. The API never returns secret fields. Changing auth type or private-key path clears the previous secret unless a replacement is supplied.
 
 ## Sessions
 
-`POST /api/sessions` dials with `ssh.Dial`. The host-key callback reads `known_hosts`.
+`POST /api/sessions` opens a TCP connection with `net.Dialer`, then uses `ssh.NewClientConn` and `sftp.NewClient`. TCP dial has a 10-second timeout. SSH handshake and initial SFTP listing have a 15-second deadline. Remote listing requests have a 15-second timeout. The host-key callback reads `known_hosts`.
 
 | Result | HTTP | Body |
 | --- | --- | --- |
@@ -91,8 +93,11 @@ An `Entry` is name, path, directory bit, symlink bit, size, mode, and mtime.
 | Unknown key | 412 | `{ "code": "unknown_host_key", "keyType", "fingerprint" }` |
 | Key mismatch | 409 | `{ "code": "host_key_changed" }` |
 | Auth failed | 401 | `{ "code": "auth_failed", "message" }` |
+| Secret needed | 428 | `{ "code": "secret_required" }` or `{ "code": "passphrase_required" }` |
 
-Trust is a second `POST /api/sessions` with the same connection id and `trustFingerprint` set to the fingerprint from the 412. The server writes the key only when the fingerprint matches the key just presented, then dials again.
+Trust is a second `POST /api/sessions` with the same connection id and `trustFingerprint` set to the fingerprint from the 412. The host-key callback writes the unknown key only when the fingerprint matches the key presented during that handshake. It then allows that handshake to continue. A mismatched known key is rejected even when `trustFingerprint` is supplied.
+
+The request can include an optional `secret` and `saveSecret`. A prompted secret is saved only after login and the initial listing succeed. A success response includes `sessionId`, `connectionId`, `name`, `path`, `parent`, `home`, and `entries`. Private-key files must be regular files no larger than 1 MiB.
 
 A session lives until `DELETE /api/sessions/{id}` or process exit. Two panes may hold two sessions, including two sessions to the same host.
 
@@ -157,7 +162,7 @@ Same-host SFTP still goes through this process. There is no server-side `cp`.
 
 ## Pane state
 
-The browser holds both panes: kind, session id, path, cursor index, selection. Refreshing the page drops sessions and returns both panes to the user’s home directory. Saved connections remain.
+The browser holds both panes: kind, session id, path, cursor index, selection, and the local directory used before connecting. Refreshing the page returns both panes to the user's home directory. On `pagehide`, the browser sends a keepalive DELETE for each session. This cleanup is best effort; a browser crash can leave a session open until process exit. Saved connections remain.
 
 ## Security
 

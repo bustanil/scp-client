@@ -1,10 +1,10 @@
 # scp-client
 
-A two-pane file manager for macOS. S1 supports local directories and copy jobs. SSH connections arrive in S2.
+A two-pane file manager for macOS. S1 supports local directories and copy jobs. S2 adds saved SSH connections and remote browsing.
 
 ## Run
 
-You need Go 1.25 or later and a Node.js version supported by Vite 8. The implementation is verified with Go 1.27.1 and Node.js 26.8.1.
+You need Go 1.26 or later and a Node.js version supported by Vite 8. The implementation is verified with Go 1.27.1 and Node.js 26.8.1.
 
 Run these commands from the project directory:
 
@@ -29,6 +29,24 @@ npm --prefix web run dev
 ```
 
 Open <http://127.0.0.1:5173>. Vite forwards `/api` to the Go server.
+
+## SSH connections
+
+1. Select the pane where you want to browse the host.
+2. Click **Connections**, then **Add connection**.
+3. Enter a name, host, port, and username. Port defaults to 22. Leave the start path empty to open the server's default directory, or enter an absolute remote path.
+4. Choose password or private-key authentication. For a key, enter the absolute path to its file on your Mac. Enter a password or passphrase now, or supply it when connecting.
+5. Save the connection, then click **Connect**. On first use, verify the key fingerprint with the server before choosing **Trust and connect**.
+
+The active pane shows the remote directory. The other pane keeps its path and selection. **Disconnect** returns the connected pane to its previous local folder. A failed login leaves the local pane in place. A changed host key blocks the connection and offers no override.
+
+The connection editor lets you edit and delete saved hosts. Leave the secret field blank to keep the saved secret. Changing the authentication type or private-key path clears the previous secret unless you provide a replacement. You must disconnect a live connection before deleting it. Editing a record does not close an existing session.
+
+Records stay in `~/.scp-client/connections.json`. Trusted keys stay in `~/.scp-client/known_hosts`. Passwords and saved key passphrases stay in macOS Keychain under service `scp-client`. A prompted secret can be used without saving it. The private key stays in its original file. Set `SCP_CLIENT_DATA_DIR` to use a different configuration directory.
+
+Refresh returns both panes to local home directories. The browser requests session cleanup when leaving the page. If the browser exits without sending that request, the session remains until the Go process stops. Saved connections and trusted host keys survive a restart.
+
+Remote browsing is available in S2. Copy jobs still support local folders only. Upload and download arrive in S3.
 
 ## Copy
 
@@ -57,6 +75,16 @@ npm run test:e2e
 ```
 
 Browser tests start and stop their own Go server. Port 8787 must be free before you run them. They use temporary directories and remove them afterward.
+
+Backend integration tests use a real loopback SSH/SFTP server with password and private-key authentication. Browser tests verify local copy, connection editing, pane behavior, and login dialogs. Browser login challenges use controlled API responses. Connection-editing tests use the production storage API in an isolated configuration directory.
+
+On macOS, run the real Keychain check with a disposable test item:
+
+```sh
+SCP_CLIENT_TEST_KEYCHAIN=1 go test ./internal/secrets -v
+```
+
+The check removes its test item afterward.
 
 ## Plan
 
