@@ -50,6 +50,7 @@ type Connected struct {
 type live struct {
 	id           string
 	connectionID string
+	serverID     string
 	ssh          *ssh.Client
 	sftp         *sftp.Client
 	home         string
@@ -157,7 +158,7 @@ func (m *Manager) Connect(ctx context.Context, req Request) (Connected, error) {
 		closeFailed()
 		return Connected{}, err
 	}
-	liveSession := &live{id: id, connectionID: record.ID, ssh: client, sftp: remote, home: home}
+	liveSession := &live{id: id, connectionID: record.ID, serverID: network.RemoteAddr().String(), ssh: client, sftp: remote, home: home}
 	start := record.StartPath
 	if start == "" {
 		start = home
@@ -250,7 +251,7 @@ func (m *Manager) Resolve(id, directory string) (location.Location, string, erro
 	if s == nil {
 		return nil, "", location.ErrUnavailable
 	}
-	remote := location.Remote{Client: s.sftp, Available: func() bool {
+	remote := location.Remote{Client: s.sftp, ServerID: s.serverID, Available: func() bool {
 		m.mu.RLock()
 		defer m.mu.RUnlock()
 		return m.sessions[id] == s

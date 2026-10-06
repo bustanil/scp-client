@@ -163,11 +163,6 @@ func TestRemoteCopyPermissionFailureAndUnavailableSession(t *testing.T) {
 	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "SSH session ended") {
 		t.Fatalf("dead session: %d %s", w.Code, w.Body.String())
 	}
-	input.From = remote
-	w = call(t, handler, "POST", "/api/jobs", input)
-	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "host-to-host") {
-		t.Fatal("host-to-host copy was enabled before S4")
-	}
 }
 
 func TestUploadToServerWithoutAtomicExtensions(t *testing.T) {

@@ -81,9 +81,6 @@ type item struct {
 }
 
 func (m *Manager) Start(req Request) (Job, error) {
-	if req.From.Kind == "sftp" && req.To.Kind == "sftp" {
-		return Job{}, errors.New("host-to-host copy is not available yet; choose a local pane")
-	}
 	from, source, err := m.resolve(req.From)
 	if err != nil {
 		return Job{}, fmt.Errorf("source: %w", err)
@@ -92,7 +89,7 @@ func (m *Manager) Start(req Request) (Job, error) {
 	if err != nil {
 		return Job{}, fmt.Errorf("destination: %w", err)
 	}
-	sameLocation := req.From.Kind == req.To.Kind && req.From.SessionID == req.To.SessionID
+	sameLocation := from.Identity() == to.Identity()
 	if sameLocation && source == dest {
 		return Job{}, errors.New("choose a different destination directory")
 	}

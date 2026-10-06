@@ -57,7 +57,7 @@ Done when a file and a folder upload, and a file and a folder download, into the
 
 ## S4 — Two hosts, copy between them
 
-Status: not started.
+Status: implemented. Real SSH/SFTP tests verify files and folders between two hosts, reverse copy, same-host sessions, overlap rejection, overwrite and merge behavior, links, and failure when either host disconnects. Two-session lifecycle checks verify that editing preserves live sessions and deletion stays blocked until both disconnect. Browser scenarios verify independent session IDs, selection retention, both copy directions, overwrite confirmation, refresh, and independent disconnects.
 
 Both panes are connected. F5 copies from one host to the other. Two panes on the same host, different directories, also copy.
 

@@ -25,6 +25,7 @@ type Entry struct {
 
 // Location describes the operations needed by a copy job.
 type Location interface {
+	Identity() string
 	List(string) ([]Entry, error)
 	Stat(string) (Entry, error)
 	Open(string) (io.ReadCloser, error)
@@ -35,6 +36,8 @@ type Location interface {
 type Local struct {
 	Base string
 }
+
+func (Local) Identity() string { return "local" }
 
 func Directory(path string) (string, error) {
 	if !filepath.IsAbs(path) {

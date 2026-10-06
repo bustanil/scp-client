@@ -20,8 +20,11 @@ var ErrUnavailable = errors.New("SSH session ended during copy. Disconnect and c
 type Remote struct {
 	Client    *sftp.Client
 	Base      string
+	ServerID  string
 	Available func() bool
 }
+
+func (r Remote) Identity() string { return "sftp:" + r.ServerID }
 
 func (r Remote) result(err error) error {
 	var status *sftp.StatusError

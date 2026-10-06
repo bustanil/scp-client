@@ -54,11 +54,14 @@ Stat(path) (Entry, error)
 Open(path) (io.ReadCloser, error)
 Create(path, mode, replace) (io.WriteCloser, error)
 MkdirAll(path) error
+Identity() string
 ```
 
 `Local` uses the `os` package. `Remote` uses `*sftp.Client`. Transfer code copies from `Open` to `Create` and does not branch on which side is local.
 
-Remote directory browsing stays in `internal/session`. S3 implements the copy interface in `location.Remote` and binds each job to an existing live SSH session and a canonical remote directory. Jobs support local-to-local, upload, and download. Host-to-host requests remain disabled until S4.
+Remote directory browsing stays in `internal/session`. `location.Remote` implements the copy interface and binds each job to an existing live SSH session and a canonical remote directory. Jobs support local-to-local, upload, download, and host-to-host copy. Each pane has its own session, including two panes using one saved connection.
+
+`Identity` distinguishes path namespaces for overlap checks. Local locations share one identity. Remote identity uses the live TCP peer's IP address and port. Two session IDs or saved labels on the same endpoint still share an identity, including DNS aliases that resolve to that endpoint. Editing a saved record does not change this identity. Remote overlap checks conservatively assume accounts on one endpoint share the absolute path namespace. This can reject matching paths in separate account chroots. Different endpoints may use identical directory paths.
 
 S1 implements `Local`. It writes each file to a temporary file in the destination directory, then publishes the completed copy. `replace=false` prevents a destination name created after preflight from being overwritten. A failed copy discards its temporary file. Destination links are errors. Source and destination directory trees must not overlap.
 
@@ -160,7 +163,7 @@ Job payload:
 4. For a file, `Open` the source and `Create` the destination, then `io.Copy`.
 5. Best effort: set the destination mode from the source mode. A failure to chmod does not fail the file.
 
-S4 will use this same process for host-to-host transfers. There is no server-side `cp`.
+Host-to-host transfers use this same process. Data streams through Go without a saved local copy. There is no server-side `cp`. Loss of either session stops the job. The other session remains available.
 
 ## Pane state
 

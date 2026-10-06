@@ -69,12 +69,3 @@ test('download cursor row with F5 and show a dropped session as failed', async (
   await expect(page.getByText('Copy failed', { exact: true })).toBeVisible()
   await expect(page.getByText('remote.txt: SSH session ended during copy. Disconnect and connect again')).toBeVisible()
 })
-
-test('two remote panes keep host-to-host copy disabled until S4', async ({ page }) => {
-  await page.goto('/')
-  await connectRemote(page, 'Left')
-  await connectRemote(page, 'Right')
-  await page.getByRole('region', { name: 'Right file pane' }).getByText('remote.txt', { exact: true }).click()
-  await expect(page.getByRole('button', { name: /Copy to other pane/ })).toBeDisabled()
-  await expect(page.getByText('Disconnect one pane to copy between this Mac and a host', { exact: true })).toBeVisible()
-})
