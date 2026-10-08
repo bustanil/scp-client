@@ -7,6 +7,7 @@ export const desktop = dirname(dirname(fileURLToPath(import.meta.url)))
 
 export function build(arch = process.arch) {
   if (process.platform !== 'darwin') throw new Error('Build the macOS app on macOS.')
+  execFileSync(process.execPath, [join(desktop, 'node_modules', 'typescript', 'lib', 'tsc.js'), '--pretty', 'false'], { cwd: desktop, stdio: 'inherit' })
   const goArch = { arm64: 'arm64', x64: 'amd64' }[arch]
   if (!goArch) throw new Error('Choose arm64 or x64.')
   const root = dirname(desktop)

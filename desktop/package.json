@@ -5,14 +5,15 @@
   "description": "A two-pane SSH and SFTP file manager for macOS",
   "author": "bustanil",
   "private": true,
-  "main": "main.cjs",
+  "main": "dist/main.js",
   "scripts": {
+    "compile": "tsc --pretty false",
     "build": "node scripts/build.mjs",
-    "start": "npm run build && electron .",
+    "start": "npm run build && node scripts/dev-app.mjs",
     "package": "node scripts/package.mjs package",
     "make": "node scripts/package.mjs make",
-    "test": "node --test tests/backend.test.cjs",
-    "test:e2e": "playwright test"
+    "test": "npm run compile && node --test tests/backend.test.cjs",
+    "test:e2e": "npm run compile && playwright test"
   },
   "config": {
     "forge": "./forge.config.cjs"
@@ -21,7 +22,9 @@
     "@electron-forge/cli": "8.0.1",
     "@electron-forge/maker-dmg": "8.0.1",
     "@playwright/test": "1.63.0",
-    "electron": "44.5.1"
+    "@types/node": "26.6.4",
+    "electron": "44.5.1",
+    "typescript": "7.0.2"
   },
   "allowScripts": {
     "fs-xattr@0.3.1": true,

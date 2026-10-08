@@ -12,7 +12,7 @@ The app opens on two panes of the home directory. The user can move around both 
 
 Includes:
 
-- Go process on `127.0.0.1:8787`, React shell with two panes, active pane, path bar.
+- Go process on `127.0.0.1:8787`, TypeScript React shell with two panes, active pane, path bar.
 - `GET /api/list` for `kind=local` only.
 - Keyboard and mouse behavior from the product spec, except connect.
 - `POST /api/jobs` and `GET /api/jobs/{id}` when both sides are local.
@@ -77,7 +77,7 @@ The user opens one app. Electron starts the bundled Go service and displays the 
 
 Includes:
 
-- Electron main process with an isolated renderer and native app menus.
+- TypeScript Electron main process with an isolated renderer and native app menus.
 - Embedded React assets and a bundled Go executable outside the application archive.
 - A free loopback port and a startup token attached by Electron.
 - Readiness checks, startup errors, and service shutdown on Cmd-Q.

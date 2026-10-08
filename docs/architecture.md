@@ -1,11 +1,11 @@
 # scp-client architecture
 
-Go serves a local HTTP API and the built React app. Electron displays the two-pane workspace in the packaged app. Browser mode remains available. SSH and SFTP stay in Go.
+Go serves a local HTTP API and the built React app. The UI in `web/` is TypeScript. Electron displays the two-pane workspace in the packaged app. Browser mode remains available. SSH and SFTP stay in Go.
 
 ## System
 
 ```text
-Browser (React, Vite)
+Browser (TypeScript, React, Vite)
   JSON over HTTP
   127.0.0.1 only
 Go process
@@ -32,8 +32,8 @@ Electron Forge packages the main process into an ASAR application archive. The G
 | SSH | `golang.org/x/crypto/ssh` | Dial, authenticate, host key check. |
 | SFTP | `github.com/pkg/sftp` v1.13.11 | `sftp.NewClient` on that SSH connection. List, read, write. |
 | Secrets | `github.com/zalando/go-keyring` | Service `scp-client`, account is the connection id. |
-| UI | React + Vite | Two instances of one pane component. Plain CSS. |
-| Desktop | Electron + Electron Forge | Window, service lifecycle, app bundle, disk image. |
+| UI | TypeScript, React, Vite | Two instances of one pane component. Strict TypeScript. Plain CSS. |
+| Desktop | Electron + Electron Forge | Window, service lifecycle, app bundle, disk image. Main process is strict TypeScript. |
 
 Directory listings use the SFTP subsystem. The legacy `scp` command cannot list a directory, so the file panes speak SFTP.
 
@@ -48,8 +48,8 @@ internal/knownhosts/        OpenSSH known_hosts
 internal/location/          List, Open, Create, MkdirAll, Stat
 internal/session/           SSH dial and SFTP client pool
 internal/transfer/          copy job
-web/                        React app
-desktop/                    Electron main process, packaging, desktop tests
+web/                        TypeScript React app (`.ts`, `.tsx`)
+desktop/src/                TypeScript Electron main process, compiled to desktop/dist
 ```
 
 ## One location type
@@ -194,6 +194,6 @@ The browser holds both panes: kind, session id, path, cursor index, selection, a
 go run ./cmd/scp-client
 ```
 
-Run `npm --prefix web ci` and `npm --prefix web run build` before starting Go for production. The binary embeds `web/dist` at compilation time. Without a frontend build, Go serves the API and a build instruction at `/`. In dev, Vite proxies `/api` to `:8787`.
+Run `npm --prefix web ci` and `npm --prefix web run build` before starting Go for production. That build runs `tsc --noEmit` with `strict` before Vite emits `web/dist`. The binary embeds `web/dist` at compilation time. Without a frontend build, Go serves the API and a build instruction at `/`. In dev, Vite proxies `/api` to `:8787`. UI source is TypeScript in `web/src` (`.ts` and `.tsx`). The Electron main process is TypeScript in `desktop/src`. `tsc` with `strict` emits CommonJS to `desktop/dist` before Electron or Forge launches. Packaging leaves that compiled output in the app archive and omits the TypeScript source.
 
 Run `npm --prefix desktop ci` and `npm --prefix desktop run make` to build the macOS app and disk image. The build script compiles React, cross-compiles Go for the selected macOS processor, and generates the icon before packaging. See the README for output paths, verification commands, and signing limitations.

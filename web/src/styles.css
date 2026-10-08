@@ -47,8 +47,9 @@ h1 { margin: 0; font-size: 21px; font-weight: 650; letter-spacing: -.5px; }
 .active .file-row.selected[data-cursor=true] { background: #f4e7c2; }
 .file-name { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .file-name > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-icon { width: 13px; flex-shrink: 0; font-size: 15px; color: #708c9d; }
-.folder-icon { color: #a6751c; }
+.file-icon { width: 16px; height: 16px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; color: #708c9d; }
+.folder-icon { color: #d39a2c; }
+.folder-icon svg { display: block; }
 .parent-row { color: #526f81; }
 .parent-note { font: 10px -apple-system, sans-serif; color: #6d8292; }
 .link-label { border: 1px solid #d7d0e4; border-radius: 3px; padding: 1px 4px; color: #7b619c; font-size: 9px; }

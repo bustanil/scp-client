@@ -5,6 +5,7 @@
 /web/playwright-report/
 /scp-client
 /desktop/node_modules/
+/desktop/dist/
 /desktop/build/
 /desktop/out/
 /desktop/test-results/

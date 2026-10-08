@@ -268,6 +268,10 @@ function PathBar({ path, loading, index, navigate }: { path: string; loading: bo
   return <form className="path-bar" onSubmit={event => { event.preventDefault(); navigate(draft) }}><span aria-hidden="true">/</span><input aria-label={`${index === 0 ? 'Left' : 'Right'} directory path`} value={draft} placeholder="Loading home directory…" spellCheck={false} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') { setDraft(path); event.currentTarget.blur() } }} /><button aria-label={`Open ${index === 0 ? 'left' : 'right'} directory`} disabled={loading || !draft}>↵</button></form>
 }
 
+function FolderMark() {
+  return <svg viewBox="0 0 16 16" width="15" height="13"><path fill="currentColor" d="M1.6 4.2c0-.72.58-1.3 1.3-1.3h2.85l1.05 1.2h6.3c.72 0 1.3.58 1.3 1.3v6.5c0 .72-.58 1.3-1.3 1.3H2.9c-.72 0-1.3-.58-1.3-1.3V4.2z" /></svg>
+}
+
 function FileRow({ entry, id, cursor, selected, click, open }: { entry: Entry; id: string; cursor: boolean; selected: boolean; click: (event: MouseEvent) => void; open: () => void }) {
-  return <div id={id} role="option" aria-selected={selected} data-cursor={cursor} className={`file-row ${selected ? 'selected' : ''} ${entry.symlink ? 'symlink' : ''}`} onClick={click} onDoubleClick={open}><span className="file-name"><span className={`file-icon ${entry.directory ? 'folder-icon' : ''}`} aria-hidden="true">{entry.symlink ? '↗' : entry.directory ? '▰' : '▤'}</span><span title={entry.name}>{entry.name}</span>{entry.symlink && <span className="link-label">link</span>}</span><span>{entry.directory ? '<DIR>' : sizeLabel(entry.size)}</span><span title={entry.modified}>{dateLabel(entry.modified)}</span></div>
+  return <div id={id} role="option" aria-selected={selected} data-cursor={cursor} className={`file-row ${selected ? 'selected' : ''} ${entry.symlink ? 'symlink' : ''}`} onClick={click} onDoubleClick={open}><span className="file-name"><span className={`file-icon ${entry.directory && !entry.symlink ? 'folder-icon' : ''}`} aria-hidden="true">{entry.symlink ? '↗' : entry.directory ? <FolderMark /> : '▤'}</span><span title={entry.name}>{entry.name}</span>{entry.symlink && <span className="link-label">link</span>}</span><span>{entry.directory ? '<DIR>' : sizeLabel(entry.size)}</span><span title={entry.modified}>{dateLabel(entry.modified)}</span></div>
 }

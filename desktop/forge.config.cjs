@@ -19,7 +19,7 @@ module.exports = {
       // Ad-hoc signatures have no Team ID for hardened runtime library validation.
       optionsForFile: () => ({ timestamp: 'none', hardenedRuntime: false }),
     },
-    ignore: [/^\/build($|\/)/, /^\/out($|\/)/, /^\/scripts($|\/)/, /^\/tests($|\/)/, /^\/test-results($|\/)/, /^\/playwright/],
+    ignore: [/^\/build($|\/)/, /^\/out($|\/)/, /^\/scripts($|\/)/, /^\/src($|\/)/, /^\/tests($|\/)/, /^\/test-results($|\/)/, /^\/playwright/, /^\/tsconfig\.json$/],
   },
   makers: [{ name: '@electron-forge/maker-dmg', config: { name: 'scp-client', format: 'ULFO' } }],
 }

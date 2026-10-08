@@ -3,7 +3,7 @@ const assert = require('node:assert/strict')
 const { mkdtemp, rm, writeFile } = require('node:fs/promises')
 const { tmpdir } = require('node:os')
 const path = require('node:path')
-const { Backend } = require('../backend.cjs')
+const { Backend } = require('../dist/backend.js')
 
 const binary = path.join(__dirname, '..', 'build', 'backend', 'scp-client')
 
